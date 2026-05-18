@@ -1,0 +1,285 @@
+.page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+}
+
+.title {
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #65727f;
+  font-size: 24rpx;
+  margin-top: 8rpx;
+}
+
+.icon-button,
+.primary-button,
+.secondary-button,
+.queue-toggle {
+  height: 72rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  line-height: 72rpx;
+  padding: 0 24rpx;
+}
+
+.icon-button {
+  background: #ffffff;
+  color: #334155;
+  border: 1rpx solid #d8dee4;
+}
+
+.section {
+  background: #ffffff;
+  border: 1rpx solid #e1e5e8;
+  border-radius: 8rpx;
+  padding: 22rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  margin-bottom: 18rpx;
+}
+
+.group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.picker-value {
+  min-width: 220rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid #d8dee4;
+  border-radius: 8rpx;
+  background: #fbfbfa;
+  font-size: 28rpx;
+}
+
+.invite-code {
+  color: #65727f;
+  font-size: 22rpx;
+  word-break: break-all;
+  text-align: right;
+}
+
+.inline-form {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 12rpx;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  border: 1rpx solid #d8dee4;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  background: #fbfbfa;
+  font-size: 28rpx;
+}
+
+.court-input {
+  max-width: 220rpx;
+}
+
+.primary-button {
+  background: #176b5b;
+  color: #ffffff;
+}
+
+.secondary-button {
+  background: #e8f1ee;
+  color: #176b5b;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.stat-item {
+  background: #ffffff;
+  border: 1rpx solid #e1e5e8;
+  border-radius: 8rpx;
+  padding: 18rpx 8rpx;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.stat-label {
+  color: #65727f;
+  font-size: 22rpx;
+  margin-top: 4rpx;
+}
+
+.queue-actions {
+  margin: 8rpx 0 20rpx;
+}
+
+.queue-toggle {
+  width: 100%;
+  background: #263238;
+  color: #ffffff;
+}
+
+.queue-info {
+  flex: 1;
+  color: #52606d;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
+
+.check-list {
+  margin-top: 18rpx;
+  border-top: 1rpx solid #edf0f2;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-height: 88rpx;
+  border-bottom: 1rpx solid #edf0f2;
+}
+
+.check-name {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.check-pass {
+  color: #65727f;
+  font-size: 24rpx;
+  margin-top: 4rpx;
+}
+
+.queue-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 18rpx;
+}
+
+.selected-count {
+  color: #52606d;
+  font-size: 26rpx;
+}
+
+.empty {
+  color: #7b8794;
+  font-size: 28rpx;
+  padding: 32rpx 0;
+  text-align: center;
+}
+
+.credential-card {
+  border-bottom: 1rpx solid #edf0f2;
+  padding: 20rpx 0;
+}
+
+.credential-card:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.credential-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.credential-pass {
+  color: #52606d;
+  font-size: 26rpx;
+  margin-top: 6rpx;
+  word-break: break-all;
+}
+
+.status-pill {
+  flex: none;
+  min-width: 104rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  text-align: center;
+}
+
+.status-idle {
+  background: #e7f4ec;
+  color: #176b5b;
+}
+
+.status-playing {
+  background: #fff1d6;
+  color: #8a4f00;
+}
+
+.status-queued {
+  background: #e7eef8;
+  color: #24527a;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  color: #65727f;
+  font-size: 24rpx;
+  margin-top: 12rpx;
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.text-button {
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 8rpx;
+  background: #f1f3f5;
+  color: #334155;
+  font-size: 24rpx;
+}
+
+.danger {
+  background: #fdebea;
+  color: #b42318;
+}

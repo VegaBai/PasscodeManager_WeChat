@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "pages/group-dashboard/group-dashboard"
+  ],
+  "window": {
+    "navigationBarTitleText": "羽毛球排队",
+    "navigationBarBackgroundColor": "#f7f7f4",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f7f4"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
