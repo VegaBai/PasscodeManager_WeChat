@@ -25,13 +25,12 @@ function minutesUntil(value, nowTs) {
 Page({
   data: {
     loading: false,
+    bindingGroup: false,
     savingQueue: false,
     openid: '',
     groups: [],
     currentGroup: null,
     currentGroupIndex: 0,
-    newGroupName: '',
-    joinGroupId: '',
     username: '',
     password: '',
     queueOpen: false,
@@ -54,7 +53,14 @@ Page({
     nowTs: Date.now()
   },
 
-  onLoad() {
+  onLoad(options) {
+    this.pageOptions = options || {};
+
+    wx.showShareMenu({
+      withShareTicket: true,
+      menus: ['shareAppMessage']
+    });
+
     this.tickTimer = setInterval(() => {
       this.setData({ nowTs: Date.now() });
       this.rebuildViewData();
@@ -62,8 +68,19 @@ Page({
     this.init();
   },
 
+  onShow() {
+    this.bindWeChatGroupFromEnterOptions();
+  },
+
   onUnload() {
     if (this.tickTimer) clearInterval(this.tickTimer);
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '羽毛球排队账号池',
+      path: '/pages/group-dashboard/group-dashboard?fromGroupShare=1'
+    };
   },
 
   async init() {
@@ -75,6 +92,7 @@ Page({
         groups: result.groups || []
       });
       this.pickCurrentGroup(currentGroupId);
+      await this.bindWeChatGroupFromEnterOptions();
       await this.refreshDashboard();
     } catch (error) {
       this.showError(error);
@@ -82,22 +100,136 @@ Page({
   },
 
   async callApi(action, payload) {
-    const response = await wx.cloud.callFunction({
-      name: 'api',
-      data: {
-        action,
-        payload
-      }
-    });
+    let response;
+
+    try {
+      response = await wx.cloud.callFunction({
+        name: 'api',
+        data: {
+          action,
+          payload
+        }
+      });
+    } catch (error) {
+      const detail = error.errMsg || error.message || JSON.stringify(error);
+      throw new Error(`云函数调用失败：${detail}`);
+    }
+
     if (!response.result || !response.result.ok) {
       throw new Error((response.result && response.result.message) || '操作失败');
     }
     return response.result.data || {};
   },
 
+  async callBindWeChatGroup(cloudID) {
+    let response;
+
+    try {
+      response = await wx.cloud.callFunction({
+        name: 'api',
+        data: {
+          action: 'bindWeChatGroup',
+          groupInfo: wx.cloud.CloudID(cloudID)
+        }
+      });
+    } catch (error) {
+      const detail = error.errMsg || error.message || JSON.stringify(error);
+      throw new Error(`云函数调用失败：${detail}`);
+    }
+
+    if (!response.result || !response.result.ok) {
+      throw new Error((response.result && response.result.message) || '绑定微信群失败');
+    }
+    return response.result.data || {};
+  },
+
+  async bindWeChatGroupFromEnterOptions() {
+    const app = getApp();
+    const enterOptions = (app.globalData && app.globalData.enterOptions) || (wx.getEnterOptionsSync && wx.getEnterOptionsSync());
+    const query = (enterOptions && enterOptions.query) || this.pageOptions || {};
+    const shareTicket = enterOptions && enterOptions.shareTicket;
+    const isGroupSharePath = query.fromGroupShare === '1';
+
+    if (!this.data.openid) return;
+    if (!shareTicket && !isGroupSharePath) return;
+
+    const bindKey = shareTicket || `group-share-path-${JSON.stringify(query)}`;
+    if (this.lastBoundShareTicket === bindKey) return;
+
+    this.lastBoundShareTicket = bindKey;
+    this.setData({ bindingGroup: true });
+
+    try {
+      const groupInfo = await this.getWeChatGroupInfo(shareTicket);
+      if (!groupInfo.cloudID) throw new Error('没有拿到微信群信息');
+
+      const result = await this.callBindWeChatGroup(groupInfo.cloudID);
+
+      this.setData({
+        groups: result.groups || []
+      });
+      this.pickCurrentGroup(result.groupId);
+      await this.refreshDashboard();
+    } catch (error) {
+      if (isGroupSharePath) {
+        wx.showModal({
+          title: '未拿到微信群信息',
+          content: error.message || '请从微信群里的小程序卡片打开。如果仍失败，请完全关闭小程序后再从群卡片打开。',
+          showCancel: false
+        });
+      }
+    } finally {
+      this.setData({ bindingGroup: false });
+    }
+  },
+
+  getWeChatGroupInfo(shareTicket) {
+    return new Promise((resolve, reject) => {
+      if (wx.getGroupEnterInfo) {
+        wx.getGroupEnterInfo({
+          success: resolve,
+          fail: (error) => {
+            if (!shareTicket) {
+              reject(error);
+              return;
+            }
+
+            wx.getShareInfo({
+              shareTicket,
+              success: resolve,
+              fail: reject
+            });
+          }
+        });
+        return;
+      }
+
+      if (!shareTicket) {
+        reject(new Error('缺少 shareTicket'));
+        return;
+      }
+
+      wx.getShareInfo({
+        shareTicket,
+        success: resolve,
+        fail: reject
+      });
+    });
+  },
+
   showError(error) {
+    const message = error.message || '操作失败';
+    if (message.length > 14) {
+      wx.showModal({
+        title: '操作失败',
+        content: message,
+        showCancel: false
+      });
+      return;
+    }
+
     wx.showToast({
-      title: error.message || '操作失败',
+      title: message,
       icon: 'none'
     });
   },
@@ -226,14 +358,6 @@ Page({
     };
   },
 
-  onNewGroupNameInput(event) {
-    this.setData({ newGroupName: event.detail.value });
-  },
-
-  onJoinGroupIdInput(event) {
-    this.setData({ joinGroupId: event.detail.value });
-  },
-
   onUsernameInput(event) {
     this.setData({ username: event.detail.value });
   },
@@ -258,46 +382,6 @@ Page({
     });
     wx.setStorageSync('currentGroupId', group._id);
     this.refreshDashboard();
-  },
-
-  async createGroup() {
-    const name = String(this.data.newGroupName || '').trim();
-    if (!name) {
-      this.showError(new Error('请输入群名称'));
-      return;
-    }
-
-    try {
-      const result = await this.callApi('createGroup', { name });
-      this.setData({
-        newGroupName: '',
-        groups: result.groups || []
-      });
-      this.pickCurrentGroup(result.groupId);
-      await this.refreshDashboard();
-    } catch (error) {
-      this.showError(error);
-    }
-  },
-
-  async joinGroup() {
-    const groupId = String(this.data.joinGroupId || '').trim();
-    if (!groupId) {
-      this.showError(new Error('请输入邀请码'));
-      return;
-    }
-
-    try {
-      const result = await this.callApi('joinGroup', { groupId });
-      this.setData({
-        joinGroupId: '',
-        groups: result.groups || []
-      });
-      this.pickCurrentGroup(groupId);
-      await this.refreshDashboard();
-    } catch (error) {
-      this.showError(error);
-    }
   },
 
   async addCredential() {

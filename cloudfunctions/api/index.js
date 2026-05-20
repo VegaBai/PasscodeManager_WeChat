@@ -271,6 +271,53 @@ async function createGroup(openid, payload) {
   };
 }
 
+async function bindWeChatGroup(openid, payload) {
+  const groupInfo = (payload.groupInfo && payload.groupInfo.data) || payload.groupInfo || {};
+  const openGId = groupInfo.openGId || groupInfo.opengid || groupInfo.open_gid;
+  if (!openGId) throw new Error('没有拿到微信群标识');
+
+  const now = new Date();
+  const existing = await db.collection('groups')
+    .where({
+      openGId
+    })
+    .limit(1)
+    .get();
+
+  let groupId;
+
+  if (existing.data.length) {
+    groupId = existing.data[0]._id;
+    await db.collection('groups').doc(groupId).update({
+      data: {
+        memberOpenids: _.addToSet(openid),
+        updatedAt: now
+      }
+    });
+  } else {
+    const created = await db.collection('groups').add({
+      data: {
+        name: '微信群羽毛球排队',
+        source: 'wechatGroup',
+        sourceText: '微信群',
+        openGId,
+        ownerOpenid: openid,
+        memberOpenids: [openid],
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+    groupId = created._id;
+  }
+
+  await logOperation(openid, groupId, 'bindWeChatGroup', {});
+
+  return {
+    groupId,
+    groups: await listGroups(openid)
+  };
+}
+
 async function joinGroup(openid, payload) {
   const groupId = String(payload.groupId || '').trim();
   const group = await getDoc('groups', groupId);
@@ -550,11 +597,13 @@ exports.main = async (event) => {
   const openid = wxContext.OPENID;
   const action = event.action || (event.TriggerName ? 'advanceExpired' : '');
   const payload = event.payload || {};
+  if (event.groupInfo) payload.groupInfo = event.groupInfo;
 
   try {
     const actions = {
       init,
       createGroup,
+      bindWeChatGroup,
       joinGroup,
       getDashboard,
       addCredential,

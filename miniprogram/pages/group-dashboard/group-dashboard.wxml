@@ -14,16 +14,12 @@
       <picker mode="selector" range="{{groups}}" range-key="name" value="{{currentGroupIndex}}" bindchange="onGroupChange">
         <view class="picker-value">{{currentGroup ? currentGroup.name : '选择球群'}}</view>
       </picker>
-      <view class="invite-code" wx:if="{{currentGroup}}">邀请码 {{currentGroup._id}}</view>
+      <view class="invite-code" wx:if="{{currentGroup}}">{{currentGroup.sourceText || '微信群'}}</view>
     </view>
 
-    <view class="inline-form">
-      <input class="input" placeholder="新群名称" value="{{newGroupName}}" bindinput="onNewGroupNameInput" />
-      <button class="primary-button" bindtap="createGroup">创建</button>
-    </view>
-    <view class="inline-form">
-      <input class="input" placeholder="输入邀请码加入" value="{{joinGroupId}}" bindinput="onJoinGroupIdInput" />
-      <button class="secondary-button" bindtap="joinGroup">加入</button>
+    <view class="wechat-group-actions">
+      <button class="primary-button group-share-button" open-type="share" loading="{{bindingGroup}}">选择微信群</button>
+      <view class="group-hint">发到已有微信群后，从群里的卡片打开即可绑定</view>
     </view>
   </view>
 

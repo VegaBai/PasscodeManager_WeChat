@@ -1,9 +1,13 @@
 App({
   globalData: {
-    cloudEnvId: 'wx3ed0db1771bb16e4'
+    // 这里填云开发环境 ID，不是小程序 AppID。留空时使用开发者工具当前选中的云环境。
+    cloudEnvId: '',
+    enterOptions: null
   },
 
-  onLaunch() {
+  onLaunch(launchOptions) {
+    this.globalData.enterOptions = launchOptions;
+
     if (!wx.cloud) {
       wx.showModal({
         title: '基础库版本过低',
@@ -13,14 +17,18 @@ App({
       return;
     }
 
-    const options = {
+    const cloudOptions = {
       traceUser: true
     };
 
     if (this.globalData.cloudEnvId) {
-      options.env = this.globalData.cloudEnvId;
+      cloudOptions.env = this.globalData.cloudEnvId;
     }
 
-    wx.cloud.init(options);
+    wx.cloud.init(cloudOptions);
+  },
+
+  onShow(options) {
+    this.globalData.enterOptions = options;
   }
 });

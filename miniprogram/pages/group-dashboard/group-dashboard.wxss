@@ -80,6 +80,23 @@
   text-align: right;
 }
 
+.wechat-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.group-share-button {
+  flex: none;
+}
+
+.group-hint {
+  flex: 1;
+  color: #65727f;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
 .inline-form {
   display: flex;
   align-items: center;
