@@ -30,6 +30,29 @@
   </view>
 
   <view wx:if="{{currentGroup}}">
+    <view class="court-stats">
+      <view class="court-stat-item">
+        <view class="court-stat-title">正在打 {{courtStats.playingCount}} 个场地</view>
+        <view class="court-stat-courts" wx:if="{{courtStats.playingItems.length}}">
+          <text class="court-stat-label">场地号：</text>
+          <text class="court-chip" wx:for="{{courtStats.playingItems}}" wx:key="courtName">
+            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text>
+          </text>
+        </view>
+        <view class="court-stat-empty" wx:else>场地号：无</view>
+      </view>
+      <view class="court-stat-item">
+        <view class="court-stat-title">排队中 {{courtStats.queuedCount}} 个场地</view>
+        <view class="court-stat-courts" wx:if="{{courtStats.queuedItems.length}}">
+          <text class="court-stat-label">场地号：</text>
+          <text class="court-chip" wx:for="{{courtStats.queuedItems}}" wx:key="courtName">
+            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text>
+          </text>
+        </view>
+        <view class="court-stat-empty" wx:else>场地号：无</view>
+      </view>
+    </view>
+
     <view class="stats">
       <view class="stat-item">
         <view class="stat-value">{{stats.total}}</view>
@@ -74,6 +97,20 @@
         </view>
       </view>
 
+      <view class="half-group-panel" wx:if="{{halfGroupOptions.length}}">
+        <view class="half-group-title">补全半场</view>
+        <radio-group bindchange="onHalfGroupChange">
+          <label class="half-group-option">
+            <radio value="__new__" checked="{{!targetQueueEntryId}}" />
+            <text>新排一组</text>
+          </label>
+          <label class="half-group-option" wx:for="{{halfGroupOptions}}" wx:key="id">
+            <radio value="{{item.id}}" checked="{{targetQueueEntryId === item.id}}" />
+            <text>{{item.label}} · {{item.statusText}}</text>
+          </label>
+        </radio-group>
+      </view>
+
       <checkbox-group bindchange="onQueueSelect">
         <view class="check-list">
           <label class="check-row" wx:for="{{idleCredentials}}" wx:key="_id">
@@ -109,7 +146,7 @@
 
         <view class="meta-row" wx:if="{{item.courtName}}">
           <text>场地号：{{item.courtName}}</text>
-          <text wx:if="{{item.groupNo}}">第 {{item.groupNo}} 组</text>
+          <text wx:if="{{item.hasGroupNo}}">第 {{item.groupNo}} 组</text>
           <text>{{item.timeText}}</text>
         </view>
         <view class="meta-row">

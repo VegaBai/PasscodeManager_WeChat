@@ -462,10 +462,14 @@ async function addQueueEntry(openid, payload) {
 
   const courtName = String(payload.courtName || '').trim();
   const courtRemainingMinutes = parseRemainingMinutes(payload.courtRemainingMinutes);
+  const targetQueueEntryId = String(payload.targetQueueEntryId || '').trim();
   const credentialIds = Array.isArray(payload.credentialIds) ? payload.credentialIds : [];
 
   if (!courtName) throw new Error('请输入场地编号');
-  if (!(credentialIds.length === 2 || credentialIds.length === 4)) {
+  if (targetQueueEntryId && credentialIds.length !== 2) {
+    throw new Error('补全半场必须选择 2 个账号');
+  }
+  if (!targetQueueEntryId && !(credentialIds.length === 2 || credentialIds.length === 4)) {
     throw new Error('每组必须选择 2 个或 4 个账号');
   }
   if (new Set(credentialIds).size !== credentialIds.length) {
@@ -488,6 +492,54 @@ async function addQueueEntry(openid, payload) {
 
   const blocked = credentialsResult.data.find((item) => item.status !== 'idle');
   if (blocked) throw new Error(`${blocked.username} 不是空闲状态`);
+
+  if (targetQueueEntryId) {
+    const targetEntry = await getDoc('queueEntries', targetQueueEntryId);
+    if (!targetEntry || targetEntry.groupId !== groupId || targetEntry.courtName !== courtName) {
+      throw new Error('要补全的半场不存在');
+    }
+    if (!['playing', 'queued'].includes(targetEntry.status)) {
+      throw new Error('只能补全正在打或排队中的半场');
+    }
+    if ((targetEntry.credentialIds || []).length !== 2) {
+      throw new Error('这组已经不是半场');
+    }
+
+    const mergedCredentialIds = (targetEntry.credentialIds || []).concat(credentialIds);
+    if (new Set(mergedCredentialIds).size !== mergedCredentialIds.length) {
+      throw new Error('账号已经在这组里');
+    }
+
+    const now = new Date();
+    await db.collection('queueEntries').doc(targetQueueEntryId).update({
+      data: {
+        credentialIds: mergedCredentialIds,
+        updatedAt: now
+      }
+    });
+
+    await db.collection('credentials').where({
+      _id: _.in(credentialIds)
+    }).update({
+      data: {
+        status: targetEntry.status,
+        currentCourtName: courtName,
+        currentQueueEntryId: targetQueueEntryId,
+        availableAt: targetEntry.endAt,
+        updatedAt: now
+      }
+    });
+
+    await logOperation(openid, groupId, 'completeHalfCourt', {
+      queueEntryId: targetQueueEntryId,
+      courtName,
+      credentialIds
+    });
+
+    return {
+      queueEntryId: targetQueueEntryId
+    };
+  }
 
   const activeResult = await db.collection('queueEntries')
     .where({

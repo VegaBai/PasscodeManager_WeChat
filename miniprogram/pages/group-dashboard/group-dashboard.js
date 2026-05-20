@@ -36,6 +36,8 @@ Page({
     queueOpen: false,
     courtName: '',
     courtRemainingMinutes: '',
+    targetQueueEntryId: '',
+    halfGroupOptions: [],
     selectedIds: [],
     credentials: [],
     sortedCredentials: [],
@@ -46,6 +48,14 @@ Page({
       idle: 0,
       playing: 0,
       queued: 0
+    },
+    courtStats: {
+      playingCount: 0,
+      playingText: '无',
+      playingItems: [],
+      queuedCount: 0,
+      queuedText: '无',
+      queuedItems: []
     },
     courtPreview: {
       nextGroupNo: 0,
@@ -321,6 +331,7 @@ Page({
         statusText: statusText[item.status] || item.status,
         courtName: item.currentCourtName || (entry && entry.courtName) || '',
         groupNo: entry && entry.groupNo,
+        hasGroupNo: Boolean(entry) && entry.groupNo !== undefined && entry.groupNo !== null,
         timeText,
         ownerText: item.createdByOpenid === this.data.openid ? '我添加的' : '群成员添加',
         canDelete: item.createdByOpenid === this.data.openid && item.status === 'idle',
@@ -344,12 +355,84 @@ Page({
       playing: credentials.filter((item) => item.status === 'playing').length,
       queued: credentials.filter((item) => item.status === 'queued').length
     };
+    const courtStats = this.buildCourtStats();
 
     this.setData({
       sortedCredentials,
       idleCredentials,
       stats,
+      courtStats,
+      halfGroupOptions: this.buildHalfGroupOptions(),
       courtPreview: this.buildCourtPreview()
+    });
+  },
+
+  buildHalfGroupOptions() {
+    const courtName = String(this.data.courtName || '').trim();
+    if (!courtName) return [];
+
+    return (this.data.queueEntries || [])
+      .filter((entry) => {
+        const credentialCount = (entry.credentialIds || []).length;
+        return entry.courtName === courtName
+          && ['playing', 'queued'].includes(entry.status)
+          && credentialCount === 2
+          && Number(entry.groupNo) >= 0
+          && Number(entry.groupNo) <= 2;
+      })
+      .sort((a, b) => Number(a.groupNo) - Number(b.groupNo))
+      .map((entry) => ({
+        id: entry._id,
+        groupNo: entry.groupNo,
+        statusText: entry.status === 'playing' ? '正在打' : '排队中',
+        label: `补全第 ${entry.groupNo} 组半场`
+      }));
+  },
+
+  buildCourtStats() {
+    const playingCourts = {};
+    const queuedCourts = {};
+
+    (this.data.queueEntries || []).forEach((entry) => {
+      if (!entry.courtName) return;
+      if (entry.status === 'playing') this.collectCourtStat(playingCourts, entry);
+      if (entry.status === 'queued') this.collectCourtStat(queuedCourts, entry);
+    });
+
+    const playingItems = this.courtStatItems(playingCourts);
+    const queuedItems = this.courtStatItems(queuedCourts);
+
+    return {
+      playingCount: playingItems.length,
+      playingText: playingItems.length ? playingItems.map((item) => item.label).join('、') : '无',
+      playingItems,
+      queuedCount: queuedItems.length,
+      queuedText: queuedItems.length ? queuedItems.map((item) => item.label).join('、') : '无',
+      queuedItems
+    };
+  },
+
+  collectCourtStat(target, entry) {
+    const courtName = String(entry.courtName);
+    if (!target[courtName]) {
+      target[courtName] = {
+        courtName,
+        isHalf: false
+      };
+    }
+    if ((entry.credentialIds || []).length === 2) {
+      target[courtName].isHalf = true;
+    }
+  },
+
+  courtStatItems(courts) {
+    return Object.keys(courts).sort().map((courtName) => {
+      const item = courts[courtName];
+      return {
+        courtName,
+        isHalf: item.isHalf,
+        label: `${courtName}${item.isHalf ? '半' : ''}`
+      };
     });
   },
 
@@ -390,7 +473,10 @@ Page({
   },
 
   onCourtNameInput(event) {
-    this.setData({ courtName: event.detail.value });
+    this.setData({
+      courtName: event.detail.value,
+      targetQueueEntryId: ''
+    });
     this.rebuildViewData();
   },
 
@@ -460,6 +546,13 @@ Page({
     this.rebuildViewData();
   },
 
+  onHalfGroupChange(event) {
+    const value = event.detail.value;
+    this.setData({
+      targetQueueEntryId: value === '__new__' ? '' : value
+    });
+  },
+
   async addQueueEntry() {
     const selectedIds = this.data.selectedIds || [];
     const courtName = String(this.data.courtName || '').trim();
@@ -468,7 +561,11 @@ Page({
       this.showError(new Error('请输入场地编号'));
       return;
     }
-    if (!(selectedIds.length === 2 || selectedIds.length === 4)) {
+    if (this.data.targetQueueEntryId && selectedIds.length !== 2) {
+      this.showError(new Error('补全半场请选择 2 个账号'));
+      return;
+    }
+    if (!this.data.targetQueueEntryId && !(selectedIds.length === 2 || selectedIds.length === 4)) {
       this.showError(new Error('请选择 2 个或 4 个账号'));
       return;
     }
@@ -479,10 +576,12 @@ Page({
         groupId: this.data.currentGroup._id,
         courtName,
         courtRemainingMinutes: this.parseRemainingMinutes(this.data.courtRemainingMinutes),
+        targetQueueEntryId: this.data.targetQueueEntryId,
         credentialIds: selectedIds
       });
       this.setData({
         selectedIds: [],
+        targetQueueEntryId: '',
         queueOpen: false
       });
       await this.refreshDashboard();
