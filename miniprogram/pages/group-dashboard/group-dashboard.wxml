@@ -33,22 +33,28 @@
       <view class="block-title">场地</view>
 
       <view class="court-stat-item">
-        <view class="court-stat-title">正在打 {{courtStats.playingCount}} 个场地</view>
+        <view class="court-stat-title">
+          <text>正在打 {{courtStats.playingCount}} 个场地</text>
+          <text class="court-stat-hint"> 场地号（剩余分钟数）</text>
+        </view>
         <view class="court-stat-courts" wx:if="{{courtStats.playingItems.length}}">
           <text class="court-stat-label">场地号：</text>
-          <text class="court-chip" wx:for="{{courtStats.playingItems}}" wx:key="courtName">
-            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text>
+          <text class="court-chip" wx:for="{{courtStats.playingItems}}" wx:key="key">
+            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text><text wx:if="{{item.hasMinutes}}" class="court-time court-time-playing">（{{item.minutes}}）</text><text wx:if="{{index < courtStats.playingItems.length - 1}}" class="court-separator">, </text>
           </text>
         </view>
         <view class="court-stat-empty" wx:else>场地号：无</view>
       </view>
 
       <view class="court-stat-item">
-        <view class="court-stat-title">排队中 {{courtStats.queuedCount}} 个场地</view>
+        <view class="court-stat-title">
+          <text>排队中 {{courtStats.queuedCount}} 个场地</text>
+          <text class="court-stat-hint"> 场地号（等待分钟数）</text>
+        </view>
         <view class="court-stat-courts" wx:if="{{courtStats.queuedItems.length}}">
           <text class="court-stat-label">场地号：</text>
-          <text class="court-chip" wx:for="{{courtStats.queuedItems}}" wx:key="courtName">
-            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text>
+          <text class="court-chip" wx:for="{{courtStats.queuedItems}}" wx:key="key">
+            <text>{{item.courtName}}</text><text wx:if="{{item.isHalf}}" class="court-half">半</text><text wx:if="{{item.hasMinutes}}" class="court-time court-time-queued">（{{item.minutes}}）</text><text wx:if="{{index < courtStats.queuedItems.length - 1}}" class="court-separator">, </text>
           </text>
         </view>
         <view class="court-stat-empty" wx:else>场地号：无</view>
@@ -60,13 +66,16 @@
 
       <view class="section queue-panel" wx:if="{{queueOpen}}">
         <view class="section-title">排队</view>
+        <view class="queue-warning">本系统无法自动获取场地信息，请确保输入准确</view>
         <view class="inline-form">
           <view class="field-label">场地号：</view>
-          <input class="input court-input" placeholder="场地编号" value="{{courtName}}" bindinput="onCourtNameInput" />
-          <input class="input remaining-input" type="number" placeholder="当前剩余分钟" value="{{courtRemainingMinutes}}" bindinput="onCourtRemainingInput" />
+          <input class="input court-input" placeholder-class="queue-input-placeholder" placeholder="场地编号" value="{{courtName}}" bindinput="onCourtNameInput" />
+          <input wx:if="{{!courtPreview.hasTrackedCourt}}" class="input remaining-input" type="number" placeholder-class="queue-input-placeholder" placeholder="当前剩余分钟" value="{{courtRemainingMinutes}}" bindinput="onCourtRemainingInput" />
+          <input wx:if="{{!courtPreview.hasTrackedCourt}}" class="input ahead-input" type="number" placeholder-class="queue-input-placeholder" placeholder="前方排队组数" value="{{courtAheadGroups}}" bindinput="onCourtAheadGroupsInput" />
           <view class="queue-info">
             <view>第 {{courtPreview.nextGroupNo}} 组</view>
-            <view>当前剩余 {{courtPreview.remainingMinutes}} 分钟</view>
+            <view wx:if="{{!courtPreview.hasTrackedCourt}}">当前剩余 {{courtPreview.remainingMinutes}} 分钟</view>
+            <view>预计等待 {{courtPreview.waitMinutes}} 分钟</view>
           </view>
         </view>
 
@@ -88,7 +97,7 @@
           <view class="check-list">
             <label class="check-row" wx:for="{{idleCredentials}}" wx:key="_id">
               <checkbox value="{{item._id}}" checked="{{item.selected}}" />
-              <view>
+              <view class="check-account">
                 <view class="check-name">{{item.username}}</view>
                 <view class="check-pass">{{item.password}}</view>
               </view>

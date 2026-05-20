@@ -37,6 +37,7 @@ Page({
     queueOpen: false,
     courtName: '',
     courtRemainingMinutes: '',
+    courtAheadGroups: '',
     targetQueueEntryId: '',
     halfGroupOptions: [],
     cancelDialogOpen: false,
@@ -65,7 +66,9 @@ Page({
     },
     courtPreview: {
       nextGroupNo: 0,
-      remainingMinutes: 0
+      remainingMinutes: 0,
+      waitMinutes: 0,
+      hasTrackedCourt: false
     },
     nowTs: Date.now()
   },
@@ -387,35 +390,37 @@ Page({
 
     return (this.data.queueEntries || [])
       .filter((entry) => {
-        const credentialCount = (entry.credentialIds || []).length;
+        const participantCount = this.entryParticipantCount(entry);
         return entry.courtName === courtName
           && ['playing', 'queued'].includes(entry.status)
-          && credentialCount === 2
-          && Number(entry.groupNo) >= 0
-          && Number(entry.groupNo) <= 2;
+          && participantCount === 2
+          && Number(entry.groupNo) >= 0;
       })
       .sort((a, b) => Number(a.groupNo) - Number(b.groupNo))
       .map((entry) => ({
         id: entry._id,
         groupNo: entry.groupNo,
         statusText: entry.status === 'playing' ? '正在打' : '排队中',
-        label: `补全第 ${entry.groupNo} 组半场`
+        label: entry.isExternal && !(entry.credentialIds || []).length
+          ? `加入第 ${entry.groupNo} 组半场`
+          : `补全第 ${entry.groupNo} 组半场`
       }));
   },
 
   buildCourtStats() {
+    const nowTs = this.data.nowTs || Date.now();
     const playingCourts = {};
-    const queuedCourts = {};
+    const queuedEntries = [];
 
     (this.data.queueEntries || []).forEach((entry) => {
       if (!entry.courtName) return;
       if (!(entry.credentialIds || []).length) return;
-      if (entry.status === 'playing') this.collectCourtStat(playingCourts, entry);
-      if (entry.status === 'queued') this.collectCourtStat(queuedCourts, entry);
+      if (entry.status === 'playing') this.collectCourtStat(playingCourts, entry, nowTs);
+      if (entry.status === 'queued') queuedEntries.push(entry);
     });
 
     const playingItems = this.courtStatItems(playingCourts);
-    const queuedItems = this.courtStatItems(queuedCourts);
+    const queuedItems = this.queueCourtStatItems(queuedEntries);
 
     return {
       playingCount: playingItems.length,
@@ -427,49 +432,120 @@ Page({
     };
   },
 
-  collectCourtStat(target, entry) {
+  collectCourtStat(target, entry, nowTs) {
     const courtName = String(entry.courtName);
     if (!target[courtName]) {
       target[courtName] = {
         courtName,
-        isHalf: false
+        isHalf: false,
+        minutes: minutesUntil(entry.endAt, nowTs)
       };
     }
     if ((entry.credentialIds || []).length === 2) {
       target[courtName].isHalf = true;
     }
+    target[courtName].minutes = Math.min(
+      target[courtName].minutes,
+      minutesUntil(entry.endAt, nowTs)
+    );
   },
 
   courtStatItems(courts) {
     return Object.keys(courts).sort().map((courtName) => {
       const item = courts[courtName];
       return {
+        key: courtName,
         courtName,
         isHalf: item.isHalf,
+        minutes: item.minutes,
+        hasMinutes: item.minutes !== undefined && item.minutes !== null,
         label: `${courtName}${item.isHalf ? '半' : ''}`
       };
     });
+  },
+
+  queueCourtStatItems(entries) {
+    const nowTs = this.data.nowTs || Date.now();
+    const shownMinuteCourts = new Set();
+    return entries
+      .slice()
+      .sort((a, b) => {
+        const groupDelta = Number(a.groupNo || 0) - Number(b.groupNo || 0);
+        if (groupDelta) return groupDelta;
+        return String(a.courtName).localeCompare(String(b.courtName));
+      })
+      .map((entry, index) => {
+        const courtName = String(entry.courtName);
+        const isHalf = (entry.credentialIds || []).length === 2;
+        const shouldShowMinutes = !shownMinuteCourts.has(courtName);
+        shownMinuteCourts.add(courtName);
+        return {
+          key: entry._id || `${courtName}-${entry.groupNo}-${index}`,
+          courtName,
+          isHalf,
+          minutes: shouldShowMinutes ? minutesUntil(entry.startAt, nowTs) : 0,
+          hasMinutes: shouldShowMinutes,
+          label: `${courtName}${isHalf ? '半' : ''}`
+        };
+      });
+  },
+
+  entryParticipantCount(entry) {
+    const credentialCount = (entry.credentialIds || []).length;
+    const externalCount = Number(entry.externalCredentialCount || 0);
+    if (entry.isExternal && !credentialCount && !externalCount) return 2;
+    return credentialCount + externalCount;
   },
 
   buildCourtPreview() {
     const courtName = String(this.data.courtName || '').trim();
     const nowTs = this.data.nowTs || Date.now();
     const manualRemaining = this.parseRemainingMinutes(this.data.courtRemainingMinutes);
+    const aheadGroups = this.parseAheadGroups(this.data.courtAheadGroups);
     if (!courtName) {
+      const waitMinutes = manualRemaining + aheadGroups * 45;
       return {
-        nextGroupNo: manualRemaining > 0 ? 1 : 0,
-        remainingMinutes: manualRemaining
+        nextGroupNo: (manualRemaining > 0 ? 1 : 0) + aheadGroups,
+        remainingMinutes: manualRemaining,
+        waitMinutes,
+        hasTrackedCourt: false
       };
     }
 
     const entries = (this.data.queueEntries || []).filter((entry) => entry.courtName === courtName);
     const playing = entries.find((entry) => entry.status === 'playing');
     const queued = entries.filter((entry) => entry.status === 'queued');
-    const hasCurrentGroup = Boolean(playing) || manualRemaining > 0;
+    const hasTrackedCourt = Boolean(entries.length);
+    if (!hasTrackedCourt) {
+      const waitMinutes = manualRemaining + aheadGroups * 45;
+      return {
+        nextGroupNo: (manualRemaining > 0 ? 1 : 0) + aheadGroups,
+        remainingMinutes: manualRemaining,
+        waitMinutes,
+        hasTrackedCourt: false
+      };
+    }
+
+    const targetEntry = this.data.targetQueueEntryId
+      ? entries.find((entry) => entry._id === this.data.targetQueueEntryId)
+      : null;
+    if (targetEntry) {
+      return {
+        nextGroupNo: Number(targetEntry.groupNo || 0),
+        remainingMinutes: targetEntry.status === 'playing' ? minutesUntil(targetEntry.endAt, nowTs) : 0,
+        waitMinutes: targetEntry.status === 'queued' ? minutesUntil(targetEntry.startAt, nowTs) : 0,
+        hasTrackedCourt: true
+      };
+    }
+
+    const hasCurrentGroup = Boolean(playing);
+    const waitUntil = queued.length ? queued[queued.length - 1].endAt : (playing && playing.endAt);
 
     return {
       nextGroupNo: (hasCurrentGroup ? 1 : 0) + queued.length,
-      remainingMinutes: playing ? minutesUntil(playing.endAt, nowTs) : manualRemaining
+      remainingMinutes: playing ? minutesUntil(playing.endAt, nowTs) : 0,
+      waitMinutes: waitUntil ? minutesUntil(waitUntil, nowTs) : 0,
+      hasTrackedCourt: true
     };
   },
 
@@ -477,6 +553,12 @@ Page({
     const minutes = Number(value);
     if (!Number.isFinite(minutes)) return 0;
     return Math.max(0, Math.min(45, Math.floor(minutes)));
+  },
+
+  parseAheadGroups(value) {
+    const groups = Number(value);
+    if (!Number.isFinite(groups)) return 0;
+    return Math.max(0, Math.min(20, Math.floor(groups)));
   },
 
   onUsernameInput(event) {
@@ -497,6 +579,11 @@ Page({
 
   onCourtRemainingInput(event) {
     this.setData({ courtRemainingMinutes: event.detail.value });
+    this.rebuildViewData();
+  },
+
+  onCourtAheadGroupsInput(event) {
+    this.setData({ courtAheadGroups: event.detail.value });
     this.rebuildViewData();
   },
 
@@ -569,6 +656,7 @@ Page({
     this.setData({
       targetQueueEntryId: value === '__new__' ? '' : value
     });
+    this.rebuildViewData();
   },
 
   async addQueueEntry() {
@@ -594,11 +682,14 @@ Page({
         groupId: this.data.currentGroup._id,
         courtName,
         courtRemainingMinutes: this.parseRemainingMinutes(this.data.courtRemainingMinutes),
+        courtAheadGroups: this.parseAheadGroups(this.data.courtAheadGroups),
         targetQueueEntryId: this.data.targetQueueEntryId,
         credentialIds: selectedIds
       });
       this.setData({
         selectedIds: [],
+        courtRemainingMinutes: '',
+        courtAheadGroups: '',
         targetQueueEntryId: '',
         queueOpen: false
       });

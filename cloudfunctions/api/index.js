@@ -33,6 +33,22 @@ function parseRemainingMinutes(value) {
   return Math.max(0, Math.min(45, Math.floor(minutes)));
 }
 
+function parseAheadGroups(value) {
+  const groups = Number(value);
+  if (!Number.isFinite(groups)) return 0;
+  return Math.max(0, Math.min(20, Math.floor(groups)));
+}
+
+function externalCredentialCount(entry) {
+  const count = Number(entry.externalCredentialCount || 0);
+  if (entry.isExternal && !(entry.credentialIds || []).length && !count) return 2;
+  return Math.max(0, Math.min(4, Math.floor(count)));
+}
+
+function participantCount(entry) {
+  return (entry.credentialIds || []).length + externalCredentialCount(entry);
+}
+
 async function ensureUser(openid) {
   const existing = await db.collection('users').where({ openid }).limit(1).get();
   const now = new Date();
@@ -462,6 +478,7 @@ async function addQueueEntry(openid, payload) {
 
   const courtName = String(payload.courtName || '').trim();
   const courtRemainingMinutes = parseRemainingMinutes(payload.courtRemainingMinutes);
+  const courtAheadGroups = parseAheadGroups(payload.courtAheadGroups);
   const targetQueueEntryId = String(payload.targetQueueEntryId || '').trim();
   const credentialIds = Array.isArray(payload.credentialIds) ? payload.credentialIds : [];
 
@@ -501,7 +518,8 @@ async function addQueueEntry(openid, payload) {
     if (!['playing', 'queued'].includes(targetEntry.status)) {
       throw new Error('只能补全正在打或排队中的半场');
     }
-    if ((targetEntry.credentialIds || []).length !== 2) {
+    const targetExternalCount = externalCredentialCount(targetEntry);
+    if (participantCount(targetEntry) !== 2) {
       throw new Error('这组已经不是半场');
     }
 
@@ -522,6 +540,7 @@ async function addQueueEntry(openid, payload) {
       data: {
         credentialIds: mergedCredentialIds,
         credentialBatches,
+        externalCredentialCount: targetExternalCount,
         updatedAt: now
       }
     });
@@ -541,7 +560,8 @@ async function addQueueEntry(openid, payload) {
     await logOperation(openid, groupId, 'completeHalfCourt', {
       queueEntryId: targetQueueEntryId,
       courtName,
-      credentialIds
+      credentialIds,
+      externalCredentialCount: targetExternalCount
     });
 
     return {
@@ -560,6 +580,7 @@ async function addQueueEntry(openid, payload) {
 
   const now = new Date();
   const activeEntries = activeResult.data.slice();
+  let createdAtCursor = now.getTime();
 
   if (!activeEntries.length && courtRemainingMinutes > 0) {
     const externalEndAt = addMinutes(now, courtRemainingMinutes);
@@ -568,27 +589,76 @@ async function addQueueEntry(openid, payload) {
         groupId,
         courtName,
         credentialIds: [],
+        credentialBatches: [],
         status: 'playing',
         groupNo: 0,
         isExternal: true,
+        externalCredentialCount: 2,
         createdByOpenid: openid,
         startAt: now,
         endAt: externalEndAt,
-        createdAt: now,
+        createdAt: new Date(createdAtCursor),
         updatedAt: now
       }
     });
+    createdAtCursor += 1;
     activeEntries.push({
       _id: external._id,
       groupId,
       courtName,
       credentialIds: [],
+      credentialBatches: [],
       status: 'playing',
       groupNo: 0,
       isExternal: true,
+      externalCredentialCount: 2,
       startAt: now,
       endAt: externalEndAt
     });
+  }
+
+  if (!activeResult.data.length && courtAheadGroups > 0) {
+    let cursor = activeEntries.reduce((latest, entry) => {
+      const endAt = entry.endAt ? new Date(entry.endAt) : now;
+      return endAt.getTime() > latest.getTime() ? endAt : latest;
+    }, now);
+
+    for (let index = 0; index < courtAheadGroups; index += 1) {
+      const startAt = cursor;
+      const endAt = addMinutes(startAt, ROUND_MINUTES);
+      const external = await db.collection('queueEntries').add({
+        data: {
+          groupId,
+          courtName,
+          credentialIds: [],
+          credentialBatches: [],
+          status: 'queued',
+          groupNo: activeEntries.length,
+          isExternal: true,
+          externalCredentialCount: 2,
+          createdByOpenid: openid,
+          startAt,
+          endAt,
+          createdAt: new Date(createdAtCursor),
+          updatedAt: now
+        }
+      });
+      createdAtCursor += 1;
+      activeEntries.push({
+        _id: external._id,
+        groupId,
+        courtName,
+        credentialIds: [],
+        credentialBatches: [],
+        status: 'queued',
+        groupNo: activeEntries.length,
+        isExternal: true,
+        externalCredentialCount: 2,
+        startAt,
+        endAt
+      });
+      cursor = endAt;
+    }
   }
 
   const hasPlaying = activeEntries.some((entry) => entry.status === 'playing');
@@ -612,7 +682,7 @@ async function addQueueEntry(openid, payload) {
       createdByOpenid: openid,
       startAt,
       endAt,
-      createdAt: now,
+      createdAt: new Date(createdAtCursor),
       updatedAt: now
     }
   });
@@ -671,6 +741,7 @@ async function cancelQueueEntry(openid, payload) {
   const now = new Date();
   const existingCredentialIds = entry.credentialIds || [];
   const cancelCredentialIds = requestedCancelCredentialIds.length ? requestedCancelCredentialIds : existingCredentialIds;
+  const existingExternalCount = externalCredentialCount(entry);
   if (!(cancelCredentialIds.length === 2 || cancelCredentialIds.length === 4)) {
     throw new Error('必须取消 2 个或 4 个账号');
   }
@@ -699,6 +770,15 @@ async function cancelQueueEntry(openid, payload) {
       data: {
         credentialIds: remainingCredentialIds,
         credentialBatches: remainingBatches,
+        updatedAt: now
+      }
+    });
+  } else if (existingExternalCount > 0) {
+    await db.collection('queueEntries').doc(entry._id).update({
+      data: {
+        credentialIds: [],
+        credentialBatches: [],
+        externalCredentialCount: existingExternalCount,
         updatedAt: now
       }
     });

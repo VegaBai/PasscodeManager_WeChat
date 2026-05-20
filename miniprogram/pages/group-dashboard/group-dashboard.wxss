@@ -158,6 +158,14 @@
   max-width: 230rpx;
 }
 
+.ahead-input {
+  max-width: 230rpx;
+}
+
+.queue-input-placeholder {
+  font-size: 22rpx;
+}
+
 .primary-button {
   background: #176b5b;
   color: #ffffff;
@@ -234,6 +242,13 @@
   font-weight: 700;
 }
 
+.court-stat-hint {
+  color: #7b8794;
+  font-size: 20rpx;
+  font-weight: 500;
+  margin-left: 16rpx;
+}
+
 .court-stat-courts {
   display: flex;
   flex-wrap: wrap;
@@ -268,6 +283,25 @@
   font-size: 22rpx;
   font-weight: 600;
   margin-left: 2rpx;
+}
+
+.court-time {
+  font-size: 20rpx;
+  font-weight: 600;
+  margin-left: 2rpx;
+}
+
+.court-time-playing {
+  color: #176b5b;
+}
+
+.court-time-queued {
+  color: #7b8794;
+}
+
+.court-separator {
+  font-size: 32rpx;
+  font-weight: 700;
 }
 
 .stats {
@@ -401,6 +435,22 @@
   line-height: 1.6;
 }
 
+.queue-warning {
+  color: #b42318;
+  font-size: 22rpx;
+  line-height: 1.4;
+  margin-top: -6rpx;
+}
+
+.queue-panel .inline-form {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.queue-panel .queue-info {
+  flex-basis: 100%;
+}
+
 .half-group-panel {
   margin-top: 18rpx;
   padding: 16rpx;
@@ -437,15 +487,25 @@
   border-bottom: 1rpx solid #edf0f2;
 }
 
-.check-name {
+.check-account {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.check-name,
+.check-pass {
+  min-width: 0;
   font-size: 28rpx;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .check-pass {
   color: #65727f;
-  font-size: 24rpx;
-  margin-top: 4rpx;
+  margin-left: 4em;
 }
 
 .queue-footer {
