@@ -118,7 +118,7 @@
     <view class="section-block">
       <view class="block-title">
         <text>账号</text>
-        <text class="block-title-hint">所有账号将在晚上12点清空</text>
+        <text class="block-title-hint">所有账号信息将在美国西部 PT 时间晚上12点清空</text>
       </view>
 
       <view class="stats">

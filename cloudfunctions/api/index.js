@@ -7,7 +7,14 @@ cloud.init({
 const db = cloud.database();
 const _ = db.command;
 const ROUND_MINUTES = 45;
+const PT_TIME_ZONE = 'America/Los_Angeles';
 const ALNUM = /^[A-Za-z0-9]+$/;
+const ptDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: PT_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
 
 function ok(data = {}) {
   return {
@@ -25,6 +32,38 @@ function fail(message) {
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60000);
+}
+
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function ptDateKey(value) {
+  const date = toDate(value);
+  if (!date) return '';
+
+  const parts = ptDateFormatter.formatToParts(date).reduce((result, part) => {
+    if (part.type !== 'literal') result[part.type] = part.value;
+    return result;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function isBeforeTodayPT(value, todayKey) {
+  const key = ptDateKey(value);
+  return Boolean(key && key < todayKey);
+}
+
+function chunks(items, size = 100) {
+  const result = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
 }
 
 function parseRemainingMinutes(value) {
@@ -115,6 +154,66 @@ async function logOperation(openid, groupId, action, detail) {
       createdAt: new Date()
     }
   });
+}
+
+async function updateDocsByIds(collectionName, ids, data) {
+  for (const idChunk of chunks(ids)) {
+    await db.collection(collectionName).where({
+      _id: _.in(idChunk)
+    }).update({
+      data
+    });
+  }
+}
+
+async function clearExpiredDailyData(now = new Date()) {
+  const todayKey = ptDateKey(now);
+
+  const credentialsResult = await db.collection('credentials')
+    .where({
+      deletedAt: _.exists(false)
+    })
+    .limit(1000)
+    .get();
+
+  const expiredCredentialIds = credentialsResult.data
+    .filter((item) => isBeforeTodayPT(item.createdAt || item.updatedAt, todayKey))
+    .map((item) => item._id);
+
+  if (expiredCredentialIds.length) {
+    await updateDocsByIds('credentials', expiredCredentialIds, {
+      status: 'idle',
+      currentCourtName: '',
+      currentQueueEntryId: '',
+      availableAt: now,
+      deletedAt: now,
+      updatedAt: now
+    });
+  }
+
+  const queueResult = await db.collection('queueEntries')
+    .where({
+      status: _.in(['playing', 'queued'])
+    })
+    .limit(1000)
+    .get();
+
+  const expiredQueueEntryIds = queueResult.data
+    .filter((entry) => isBeforeTodayPT(entry.createdAt || entry.startAt || entry.updatedAt, todayKey))
+    .map((entry) => entry._id);
+
+  if (expiredQueueEntryIds.length) {
+    await updateDocsByIds('queueEntries', expiredQueueEntryIds, {
+      status: 'cleared',
+      clearedAt: now,
+      updatedAt: now
+    });
+  }
+
+  return {
+    clearedCredentials: expiredCredentialIds.length,
+    clearedQueueEntries: expiredQueueEntryIds.length
+  };
 }
 
 async function finishEntry(entry, endedAt) {
@@ -243,6 +342,7 @@ async function rescheduleCourt(groupId, courtName) {
 
 async function advanceExpired() {
   const now = new Date();
+  const dailyCleanup = await clearExpiredDailyData(now);
   const expiredResult = await db.collection('queueEntries')
     .where({
       status: 'playing',
@@ -263,7 +363,8 @@ async function advanceExpired() {
   }
 
   return {
-    advanced: expiredResult.data.length
+    advanced: expiredResult.data.length,
+    ...dailyCleanup
   };
 }
 
