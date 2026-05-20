@@ -27,6 +27,12 @@ function addMinutes(date, minutes) {
   return new Date(date.getTime() + minutes * 60000);
 }
 
+function parseRemainingMinutes(value) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return 0;
+  return Math.max(0, Math.min(45, Math.floor(minutes)));
+}
+
 async function ensureUser(openid) {
   const existing = await db.collection('users').where({ openid }).limit(1).get();
   const now = new Date();
@@ -104,48 +110,52 @@ async function finishEntry(entry, endedAt) {
     }
   });
 
-  await db.collection('credentials').where({
-    _id: _.in(entry.credentialIds || [])
-  }).update({
-    data: {
-      status: 'idle',
-      currentCourtName: '',
-      currentQueueEntryId: '',
-      availableAt: endedAt,
-      updatedAt: endedAt
-    }
-  });
+  if ((entry.credentialIds || []).length) {
+    await db.collection('credentials').where({
+      _id: _.in(entry.credentialIds || [])
+    }).update({
+      data: {
+        status: 'idle',
+        currentCourtName: '',
+        currentQueueEntryId: '',
+        availableAt: endedAt,
+        updatedAt: endedAt
+      }
+    });
+  }
 }
 
 async function setEntryPlaying(entry, startAt) {
   const endAt = addMinutes(startAt, ROUND_MINUTES);
 
   await db.collection('queueEntries').doc(entry._id).update({
-    data: {
-      status: 'playing',
-      groupNo: 1,
-      startAt,
-      endAt,
+      data: {
+        status: 'playing',
+        groupNo: 0,
+        startAt,
+        endAt,
       updatedAt: startAt
     }
   });
 
-  await db.collection('credentials').where({
-    _id: _.in(entry.credentialIds || [])
-  }).update({
-    data: {
-      status: 'playing',
-      currentCourtName: entry.courtName,
-      currentQueueEntryId: entry._id,
-      availableAt: endAt,
-      updatedAt: startAt
-    }
-  });
+  if ((entry.credentialIds || []).length) {
+    await db.collection('credentials').where({
+      _id: _.in(entry.credentialIds || [])
+    }).update({
+      data: {
+        status: 'playing',
+        currentCourtName: entry.courtName,
+        currentQueueEntryId: entry._id,
+        availableAt: endAt,
+        updatedAt: startAt
+      }
+    });
+  }
 
   return {
     ...entry,
     status: 'playing',
-    groupNo: 1,
+    groupNo: 0,
     startAt,
     endAt
   };
@@ -183,7 +193,7 @@ async function rescheduleCourt(groupId, courtName) {
   }
 
   let cursor = playing ? new Date(playing.endAt) : now;
-  let groupNo = playing ? 2 : 1;
+  let groupNo = playing ? 1 : 0;
 
   for (const entry of queued) {
     const startAt = cursor;
@@ -197,16 +207,18 @@ async function rescheduleCourt(groupId, courtName) {
       }
     });
 
-    await db.collection('credentials').where({
-      _id: _.in(entry.credentialIds || [])
-    }).update({
-      data: {
-        currentCourtName: courtName,
-        currentQueueEntryId: entry._id,
-        availableAt: endAt,
-        updatedAt: now
-      }
-    });
+    if ((entry.credentialIds || []).length) {
+      await db.collection('credentials').where({
+        _id: _.in(entry.credentialIds || [])
+      }).update({
+        data: {
+          currentCourtName: courtName,
+          currentQueueEntryId: entry._id,
+          availableAt: endAt,
+          updatedAt: now
+        }
+      });
+    }
 
     cursor = endAt;
     groupNo += 1;
@@ -297,7 +309,7 @@ async function bindWeChatGroup(openid, payload) {
   } else {
     const created = await db.collection('groups').add({
       data: {
-        name: '微信群羽毛球排队',
+        name: `微信群 ${openGId.slice(-6)}`,
         source: 'wechatGroup',
         sourceText: '微信群',
         openGId,
@@ -449,6 +461,7 @@ async function addQueueEntry(openid, payload) {
   await requireGroupMember(groupId, openid);
 
   const courtName = String(payload.courtName || '').trim();
+  const courtRemainingMinutes = parseRemainingMinutes(payload.courtRemainingMinutes);
   const credentialIds = Array.isArray(payload.credentialIds) ? payload.credentialIds : [];
 
   if (!courtName) throw new Error('请输入场地编号');
@@ -486,15 +499,47 @@ async function addQueueEntry(openid, payload) {
     .get();
 
   const now = new Date();
-  const hasPlaying = activeResult.data.some((entry) => entry.status === 'playing');
-  const status = hasPlaying || activeResult.data.length ? 'queued' : 'playing';
-  const latestEnd = activeResult.data.reduce((latest, entry) => {
+  const activeEntries = activeResult.data.slice();
+
+  if (!activeEntries.length && courtRemainingMinutes > 0) {
+    const externalEndAt = addMinutes(now, courtRemainingMinutes);
+    const external = await db.collection('queueEntries').add({
+      data: {
+        groupId,
+        courtName,
+        credentialIds: [],
+        status: 'playing',
+        groupNo: 0,
+        isExternal: true,
+        createdByOpenid: openid,
+        startAt: now,
+        endAt: externalEndAt,
+        createdAt: now,
+        updatedAt: now
+      }
+    });
+    activeEntries.push({
+      _id: external._id,
+      groupId,
+      courtName,
+      credentialIds: [],
+      status: 'playing',
+      groupNo: 0,
+      isExternal: true,
+      startAt: now,
+      endAt: externalEndAt
+    });
+  }
+
+  const hasPlaying = activeEntries.some((entry) => entry.status === 'playing');
+  const status = hasPlaying || activeEntries.length ? 'queued' : 'playing';
+  const latestEnd = activeEntries.reduce((latest, entry) => {
     const endAt = entry.endAt ? new Date(entry.endAt) : now;
     return endAt.getTime() > latest.getTime() ? endAt : latest;
   }, now);
   const startAt = status === 'playing' ? now : latestEnd;
   const endAt = addMinutes(startAt, ROUND_MINUTES);
-  const groupNo = status === 'playing' ? 1 : activeResult.data.length + 1;
+  const groupNo = status === 'playing' ? 0 : activeEntries.length;
 
   const created = await db.collection('queueEntries').add({
     data: {

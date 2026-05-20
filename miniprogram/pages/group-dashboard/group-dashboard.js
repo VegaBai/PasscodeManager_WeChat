@@ -35,6 +35,7 @@ Page({
     password: '',
     queueOpen: false,
     courtName: '',
+    courtRemainingMinutes: '',
     selectedIds: [],
     credentials: [],
     sortedCredentials: [],
@@ -47,7 +48,7 @@ Page({
       queued: 0
     },
     courtPreview: {
-      nextGroupNo: 1,
+      nextGroupNo: 0,
       remainingMinutes: 0
     },
     nowTs: Date.now()
@@ -89,7 +90,7 @@ Page({
       const currentGroupId = wx.getStorageSync('currentGroupId');
       this.setData({
         openid: result.openid,
-        groups: result.groups || []
+        groups: this.normalizeGroups(result.groups || [])
       });
       this.pickCurrentGroup(currentGroupId);
       await this.bindWeChatGroupFromEnterOptions();
@@ -166,7 +167,7 @@ Page({
       const result = await this.callBindWeChatGroup(groupInfo.cloudID);
 
       this.setData({
-        groups: result.groups || []
+        groups: this.normalizeGroups(result.groups || [])
       });
       this.pickCurrentGroup(result.groupId);
       await this.refreshDashboard();
@@ -234,6 +235,20 @@ Page({
     });
   },
 
+  normalizeGroups(groups) {
+    return (groups || []).map((group) => {
+      const shortId = group.openGId ? group.openGId.slice(-6) : '';
+      const displayName = group.openGId && (!group.name || group.name === '微信群羽毛球排队')
+        ? `微信群 ${shortId}`
+        : (group.name || (shortId ? `微信群 ${shortId}` : '羽毛球群'));
+      return {
+        ...group,
+        openGIdShort: shortId ? `群标识 ${shortId}` : '',
+        displayName
+      };
+    });
+  },
+
   pickCurrentGroup(groupId) {
     const groups = this.data.groups || [];
     let index = groups.findIndex((group) => group._id === groupId);
@@ -257,7 +272,7 @@ Page({
     try {
       const result = await this.callApi('getDashboard', { groupId });
       this.setData({
-        groups: result.groups || this.data.groups,
+        groups: this.normalizeGroups(result.groups || this.data.groups),
         currentGroup: result.currentGroup || this.data.currentGroup,
         credentials: result.credentials || [],
         queueEntries: result.queueEntries || [],
@@ -284,7 +299,7 @@ Page({
     const statusText = {
       idle: '空闲',
       playing: '正在打',
-      queued: '排队'
+      queued: '排队中'
     };
     const statusRank = {
       idle: 0,
@@ -341,21 +356,29 @@ Page({
   buildCourtPreview() {
     const courtName = String(this.data.courtName || '').trim();
     const nowTs = this.data.nowTs || Date.now();
+    const manualRemaining = this.parseRemainingMinutes(this.data.courtRemainingMinutes);
     if (!courtName) {
       return {
-        nextGroupNo: 1,
-        remainingMinutes: 0
+        nextGroupNo: manualRemaining > 0 ? 1 : 0,
+        remainingMinutes: manualRemaining
       };
     }
 
     const entries = (this.data.queueEntries || []).filter((entry) => entry.courtName === courtName);
     const playing = entries.find((entry) => entry.status === 'playing');
     const queued = entries.filter((entry) => entry.status === 'queued');
+    const hasCurrentGroup = Boolean(playing) || manualRemaining > 0;
 
     return {
-      nextGroupNo: (playing ? 1 : 0) + queued.length + 1,
-      remainingMinutes: playing ? minutesUntil(playing.endAt, nowTs) : 0
+      nextGroupNo: (hasCurrentGroup ? 1 : 0) + queued.length,
+      remainingMinutes: playing ? minutesUntil(playing.endAt, nowTs) : manualRemaining
     };
+  },
+
+  parseRemainingMinutes(value) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes)) return 0;
+    return Math.max(0, Math.min(45, Math.floor(minutes)));
   },
 
   onUsernameInput(event) {
@@ -368,6 +391,11 @@ Page({
 
   onCourtNameInput(event) {
     this.setData({ courtName: event.detail.value });
+    this.rebuildViewData();
+  },
+
+  onCourtRemainingInput(event) {
+    this.setData({ courtRemainingMinutes: event.detail.value });
     this.rebuildViewData();
   },
 
@@ -450,6 +478,7 @@ Page({
       await this.callApi('addQueueEntry', {
         groupId: this.data.currentGroup._id,
         courtName,
+        courtRemainingMinutes: this.parseRemainingMinutes(this.data.courtRemainingMinutes),
         credentialIds: selectedIds
       });
       this.setData({

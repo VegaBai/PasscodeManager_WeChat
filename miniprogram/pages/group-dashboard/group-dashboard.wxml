@@ -2,7 +2,10 @@
   <view class="topbar">
     <view>
       <view class="title">羽毛球排队</view>
-      <view class="subtitle" wx:if="{{currentGroup}}">{{currentGroup.name}}</view>
+      <view class="subtitle" wx:if="{{currentGroup && currentGroup.openGId}}">
+        <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
+      </view>
+      <view class="subtitle" wx:elif="{{currentGroup}}">{{currentGroup.displayName || currentGroup.name}}</view>
       <view class="subtitle" wx:else>选择或创建一个群</view>
     </view>
     <button class="icon-button" bindtap="refreshDashboard" loading="{{loading}}">刷新</button>
@@ -11,10 +14,13 @@
   <view class="section group-section">
     <view class="section-title">球群</view>
     <view class="group-row" wx:if="{{groups.length}}">
-      <picker mode="selector" range="{{groups}}" range-key="name" value="{{currentGroupIndex}}" bindchange="onGroupChange">
-        <view class="picker-value">{{currentGroup ? currentGroup.name : '选择球群'}}</view>
+      <picker mode="selector" range="{{groups}}" range-key="displayName" value="{{currentGroupIndex}}" bindchange="onGroupChange">
+        <view class="picker-value" wx:if="{{currentGroup && currentGroup.openGId}}">
+          <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
+        </view>
+        <view class="picker-value" wx:else>{{currentGroup ? currentGroup.displayName : '选择球群'}}</view>
       </picker>
-      <view class="invite-code" wx:if="{{currentGroup}}">{{currentGroup.sourceText || '微信群'}}</view>
+      <view class="invite-code" wx:if="{{currentGroup}}">{{currentGroup.openGIdShort || currentGroup.sourceText || '微信群'}}</view>
     </view>
 
     <view class="wechat-group-actions">
@@ -59,7 +65,9 @@
     <view class="section queue-panel" wx:if="{{queueOpen}}">
       <view class="section-title">排队</view>
       <view class="inline-form">
+        <view class="field-label">场地号：</view>
         <input class="input court-input" placeholder="场地编号" value="{{courtName}}" bindinput="onCourtNameInput" />
+        <input class="input remaining-input" type="number" placeholder="当前剩余分钟" value="{{courtRemainingMinutes}}" bindinput="onCourtRemainingInput" />
         <view class="queue-info">
           <view>第 {{courtPreview.nextGroupNo}} 组</view>
           <view>当前剩余 {{courtPreview.remainingMinutes}} 分钟</view>
@@ -89,16 +97,18 @@
       <view class="empty" wx:if="{{!sortedCredentials.length}}">暂无账号</view>
 
       <view class="credential-card" wx:for="{{sortedCredentials}}" wx:key="_id">
-        <view class="card-main">
-          <view>
+        <view class="credential-head">
+          <view class="credential-line">
             <view class="credential-name">{{item.username}}</view>
+            <view wx:if="{{item.canDelete}}" class="delete-icon-button" data-id="{{item._id}}" bindtap="deleteCredential">×</view>
             <view class="credential-pass">{{item.password}}</view>
           </view>
           <view class="status-pill status-{{item.status}}">{{item.statusText}}</view>
+          <view wx:if="{{item.canCancelQueue}}" class="cancel-icon-button danger" data-entry-id="{{item.currentQueueEntryId}}" bindtap="cancelQueueEntry">取消</view>
         </view>
 
         <view class="meta-row" wx:if="{{item.courtName}}">
-          <text>{{item.courtName}}</text>
+          <text>场地号：{{item.courtName}}</text>
           <text wx:if="{{item.groupNo}}">第 {{item.groupNo}} 组</text>
           <text>{{item.timeText}}</text>
         </view>
@@ -106,10 +116,6 @@
           <text>{{item.ownerText}}</text>
         </view>
 
-        <view class="card-actions" wx:if="{{item.canDelete || item.canCancelQueue}}">
-          <button wx:if="{{item.canCancelQueue}}" class="text-button danger" data-entry-id="{{item.currentQueueEntryId}}" bindtap="cancelQueueEntry">取消排队</button>
-          <button wx:if="{{item.canDelete}}" class="text-button" data-id="{{item._id}}" bindtap="deleteCredential">删除</button>
-        </view>
       </view>
     </view>
   </view>

@@ -104,6 +104,13 @@
   margin-top: 12rpx;
 }
 
+.field-label {
+  flex: none;
+  color: #334155;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
 .input {
   flex: 1;
   min-width: 0;
@@ -116,7 +123,11 @@
 }
 
 .court-input {
-  max-width: 220rpx;
+  max-width: 190rpx;
+}
+
+.remaining-input {
+  max-width: 230rpx;
 }
 
 .primary-button {
@@ -225,24 +236,59 @@
   padding-bottom: 0;
 }
 
-.card-main {
+.credential-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16rpx;
+  gap: 12rpx;
+}
+
+.credential-line {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 10rpx;
 }
 
 .credential-name {
+  flex: none;
+  max-width: 44%;
+  min-width: 0;
   font-size: 32rpx;
   font-weight: 700;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .credential-pass {
-  color: #52606d;
+  flex: 1;
+  min-width: 0;
+  margin-left: 24rpx;
+  color: #1f2933;
+  font-size: 32rpx;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32rpx;
+  height: 32rpx;
+  min-width: 32rpx;
+  line-height: 32rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: #f1f3f5;
+  color: #b42318;
   font-size: 26rpx;
-  margin-top: 6rpx;
-  word-break: break-all;
+  text-align: center;
 }
 
 .status-pill {
@@ -253,6 +299,21 @@
   border-radius: 8rpx;
   font-size: 22rpx;
   text-align: center;
+}
+
+.cancel-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: auto;
+  min-width: 0;
+  height: 38rpx;
+  line-height: 38rpx;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  box-sizing: border-box;
 }
 
 .status-idle {
