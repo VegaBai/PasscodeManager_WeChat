@@ -1,7 +1,7 @@
 <view class="page">
   <view class="topbar">
     <view class="topbar-title">
-      <view class="title">羽毛球排队</view>
+      <view class="title">羽毛球Drop-in排队管理</view>
       <view class="subtitle" wx:if="{{currentGroup && currentGroup.openGId}}">
         <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
       </view>
@@ -30,9 +30,12 @@
 
   <view wx:if="{{currentGroup}}">
     <view class="section-block">
-      <view class="block-title">场地</view>
+      <view class="block-title">
+        <text>场地</text>
+        <text class="block-title-hint">注意手动录入可能与球馆系统有时间误差</text>
+      </view>
 
-      <view class="court-stat-item">
+      <view class="court-stat-item court-stat-playing">
         <view class="court-stat-title">
           <text>正在打 {{courtStats.playingCount}} 个场地</text>
           <text class="court-stat-hint"> 场地号（剩余分钟数）</text>
@@ -113,7 +116,10 @@
     </view>
 
     <view class="section-block">
-      <view class="block-title">账号</view>
+      <view class="block-title">
+        <text>账号</text>
+        <text class="block-title-hint">所有账号将在晚上12点清空</text>
+      </view>
 
       <view class="stats">
         <view class="stat-item">

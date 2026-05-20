@@ -20,6 +20,7 @@
   font-size: 44rpx;
   font-weight: 700;
   line-height: 1.2;
+  word-break: break-word;
 }
 
 .subtitle {
@@ -68,6 +69,13 @@
   font-size: 36rpx;
   font-weight: 700;
   margin: 28rpx 0 16rpx;
+}
+
+.block-title-hint {
+  color: #7b8794;
+  font-size: 20rpx;
+  font-weight: 500;
+  margin-left: 24rpx;
 }
 
 .group-row {
@@ -232,6 +240,35 @@
   padding: 16rpx;
 }
 
+.court-stat-playing {
+  background: #dff2e6;
+  padding: 22rpx;
+}
+
+.court-stat-playing .court-stat-title {
+  font-size: 30rpx;
+}
+
+.court-stat-playing .court-stat-hint {
+  font-size: 22rpx;
+}
+
+.court-stat-playing .court-stat-courts,
+.court-stat-playing .court-stat-empty,
+.court-stat-playing .court-stat-label {
+  font-size: 26rpx;
+}
+
+.court-stat-playing .court-chip,
+.court-stat-playing .court-separator {
+  font-size: 38rpx;
+}
+
+.court-stat-playing .court-half,
+.court-stat-playing .court-time {
+  font-size: 24rpx;
+}
+
 .court-stat-item + .court-stat-item {
   margin-top: 15rpx;
 }
@@ -292,7 +329,7 @@
 }
 
 .court-time-playing {
-  color: #176b5b;
+  color: #7b8794;
 }
 
 .court-time-queued {
