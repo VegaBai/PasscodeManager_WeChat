@@ -16,6 +16,34 @@ function formatClock(value) {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function secondSundayOfMarchUtc(year) {
+  const marchFirst = new Date(Date.UTC(year, 2, 1));
+  const day = marchFirst.getUTCDay();
+  const firstSunday = 1 + ((7 - day) % 7);
+  const secondSunday = firstSunday + 7;
+  return Date.UTC(year, 2, secondSunday, 10);
+}
+
+function firstSundayOfNovemberUtc(year) {
+  const novemberFirst = new Date(Date.UTC(year, 10, 1));
+  const day = novemberFirst.getUTCDay();
+  const firstSunday = 1 + ((7 - day) % 7);
+  return Date.UTC(year, 10, firstSunday, 9);
+}
+
+function ptOffsetHours(date) {
+  const year = date.getUTCFullYear();
+  const ts = date.getTime();
+  return ts >= secondSundayOfMarchUtc(year) && ts < firstSundayOfNovemberUtc(year) ? -7 : -8;
+}
+
+function formatPTDateTime(value) {
+  const date = toDate(value);
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const ptDate = new Date(date.getTime() + ptOffsetHours(date) * 3600000);
+  return `${pad(ptDate.getUTCMonth() + 1)}/${pad(ptDate.getUTCDate())} ${pad(ptDate.getUTCHours())}:${pad(ptDate.getUTCMinutes())}`;
+}
+
 function minutesUntil(value, nowTs) {
   const date = toDate(value);
   if (!date || Number.isNaN(date.getTime())) return 0;
@@ -46,6 +74,10 @@ Page({
     cancelSelectedIds: [],
     cancelCanConfirm: false,
     selectedIds: [],
+    credentialSortIndex: 0,
+    credentialSortMode: 'default',
+    credentialSortOptions: ['默认排序', '添加时间 早到晚', '添加时间 晚到早'],
+    credentialSortText: '默认排序',
     credentials: [],
     sortedCredentials: [],
     idleCredentials: [],
@@ -336,6 +368,7 @@ Page({
 
     const credentials = (this.data.credentials || []).map((item) => {
       const entry = item.currentQueueEntryId ? entriesById[item.currentQueueEntryId] : null;
+      const createdAt = toDate(item.createdAt);
       let timeText = '';
       if (item.status === 'playing' && entry) {
         timeText = `剩余 ${minutesUntil(entry.endAt, nowTs)} 分钟`;
@@ -351,18 +384,32 @@ Page({
         hasGroupNo: Boolean(entry) && entry.groupNo !== undefined && entry.groupNo !== null,
         timeText,
         ownerText: item.createdByOpenid === this.data.openid ? '我添加的' : '群成员添加',
+        createdAtText: formatPTDateTime(item.createdAt),
+        createdAtTs: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.getTime() : 0,
         canDelete: item.createdByOpenid === this.data.openid && item.status === 'idle',
         canCancelQueue: item.status === 'playing' || item.status === 'queued',
         selected: selectedSet.has(item._id)
       };
     });
 
-    const sortedCredentials = credentials.slice().sort((a, b) => {
+    const defaultCredentialCompare = (a, b) => {
       const rankDelta = (statusRank[a.status] || 9) - (statusRank[b.status] || 9);
       if (rankDelta) return rankDelta;
       const courtDelta = String(a.courtName || '').localeCompare(String(b.courtName || ''));
       if (courtDelta) return courtDelta;
       return String(a.username).localeCompare(String(b.username));
+    };
+
+    const sortedCredentials = credentials.slice().sort((a, b) => {
+      if (this.data.credentialSortMode === 'createdAsc') {
+        const delta = (a.createdAtTs || 0) - (b.createdAtTs || 0);
+        return delta || defaultCredentialCompare(a, b);
+      }
+      if (this.data.credentialSortMode === 'createdDesc') {
+        const delta = (b.createdAtTs || 0) - (a.createdAtTs || 0);
+        return delta || defaultCredentialCompare(a, b);
+      }
+      return defaultCredentialCompare(a, b);
     });
 
     const idleCredentials = sortedCredentials.filter((item) => item.status === 'idle');
@@ -567,6 +614,18 @@ Page({
 
   onPasswordInput(event) {
     this.setData({ password: event.detail.value });
+  },
+
+  onCredentialSortChange(event) {
+    const index = Number(event.detail.value || 0);
+    const modes = ['default', 'createdAsc', 'createdDesc'];
+    const options = this.data.credentialSortOptions || [];
+    this.setData({
+      credentialSortIndex: index,
+      credentialSortMode: modes[index] || 'default',
+      credentialSortText: options[index] || '默认排序'
+    });
+    this.rebuildViewData();
   },
 
   onCourtNameInput(event) {

@@ -150,7 +150,12 @@
       </view>
 
       <view class="section list-section">
-        <view class="section-title">账号池</view>
+        <view class="list-header">
+          <view class="section-title list-title">账号池</view>
+          <picker mode="selector" range="{{credentialSortOptions}}" value="{{credentialSortIndex}}" bindchange="onCredentialSortChange">
+            <view class="sort-picker">{{credentialSortText}}</view>
+          </picker>
+        </view>
         <view class="empty" wx:if="{{!sortedCredentials.length}}">暂无账号</view>
 
         <view class="credential-card" wx:for="{{sortedCredentials}}" wx:key="_id">
@@ -171,6 +176,7 @@
           </view>
           <view class="meta-row">
             <text>{{item.ownerText}}</text>
+            <text wx:if="{{item.createdAtText}}">{{item.createdAtText}}</text>
           </view>
         </view>
       </view>
