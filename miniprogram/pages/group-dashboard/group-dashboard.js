@@ -26,6 +26,7 @@ Page({
   data: {
     loading: false,
     bindingGroup: false,
+    switchGroupDialogOpen: false,
     savingQueue: false,
     openid: '',
     groups: [],
@@ -38,6 +39,11 @@ Page({
     courtRemainingMinutes: '',
     targetQueueEntryId: '',
     halfGroupOptions: [],
+    cancelDialogOpen: false,
+    cancelEntryId: '',
+    cancelOptions: [],
+    cancelSelectedIds: [],
+    cancelCanConfirm: false,
     selectedIds: [],
     credentials: [],
     sortedCredentials: [],
@@ -245,6 +251,14 @@ Page({
     });
   },
 
+  openSwitchGroupDialog() {
+    this.setData({ switchGroupDialogOpen: true });
+  },
+
+  closeSwitchGroupDialog() {
+    this.setData({ switchGroupDialogOpen: false });
+  },
+
   normalizeGroups(groups) {
     return (groups || []).map((group) => {
       const shortId = group.openGId ? group.openGId.slice(-6) : '';
@@ -395,6 +409,7 @@ Page({
 
     (this.data.queueEntries || []).forEach((entry) => {
       if (!entry.courtName) return;
+      if (!(entry.credentialIds || []).length) return;
       if (entry.status === 'playing') this.collectCourtStat(playingCourts, entry);
       if (entry.status === 'queued') this.collectCourtStat(queuedCourts, entry);
     });
@@ -526,6 +541,9 @@ Page({
 
   async deleteCredential(event) {
     const id = event.currentTarget.dataset.id;
+    const confirmed = await this.confirmAction('删除账号', '确定删除这个用户名和密码吗？');
+    if (!confirmed) return;
+
     try {
       await this.callApi('deleteCredential', {
         groupId: this.data.currentGroup._id,
@@ -596,14 +614,104 @@ Page({
     const entryId = event.currentTarget.dataset.entryId;
     if (!entryId) return;
 
+    const entry = (this.data.queueEntries || []).find((item) => item._id === entryId);
+    if (!entry) return;
+
+    const credentialIds = entry.credentialIds || [];
+    if (credentialIds.length === 4) {
+      this.openCancelDialog(entry);
+      return;
+    }
+
+    const confirmed = await this.confirmAction('取消排队', '确定取消这一组排队或正在打的记录吗？');
+    if (!confirmed) return;
+
     try {
       await this.callApi('cancelQueueEntry', {
         groupId: this.data.currentGroup._id,
-        queueEntryId: entryId
+        queueEntryId: entryId,
+        cancelCredentialIds: credentialIds
       });
       await this.refreshDashboard();
     } catch (error) {
       this.showError(error);
     }
+  },
+
+  openCancelDialog(entry) {
+    const credentialsById = {};
+    (this.data.credentials || []).forEach((credential) => {
+      credentialsById[credential._id] = credential;
+    });
+
+    const cancelOptions = (entry.credentialIds || []).map((id) => {
+      const credential = credentialsById[id] || {};
+      return {
+        id,
+        username: credential.username || id,
+        password: credential.password || ''
+      };
+    });
+
+    this.setData({
+      cancelDialogOpen: true,
+      cancelEntryId: entry._id,
+      cancelOptions,
+      cancelSelectedIds: [],
+      cancelCanConfirm: false
+    });
+  },
+
+  closeCancelDialog() {
+    this.setData({
+      cancelDialogOpen: false,
+      cancelEntryId: '',
+      cancelOptions: [],
+      cancelSelectedIds: [],
+      cancelCanConfirm: false
+    });
+  },
+
+  onCancelSelect(event) {
+    const selectedIds = event.detail.value || [];
+    this.setData({
+      cancelSelectedIds: selectedIds,
+      cancelCanConfirm: selectedIds.length === 2 || selectedIds.length === 4
+    });
+  },
+
+  async confirmCancelSelection() {
+    const selectedIds = this.data.cancelSelectedIds || [];
+    if (!this.data.cancelCanConfirm) {
+      return;
+    }
+
+    const confirmed = await this.confirmAction('取消排队', `确定取消选中的 ${selectedIds.length} 个账号吗？`);
+    if (!confirmed) return;
+
+    try {
+      await this.callApi('cancelQueueEntry', {
+        groupId: this.data.currentGroup._id,
+        queueEntryId: this.data.cancelEntryId,
+        cancelCredentialIds: selectedIds
+      });
+      this.closeCancelDialog();
+      await this.refreshDashboard();
+    } catch (error) {
+      this.showError(error);
+    }
+  },
+
+  confirmAction(title, content) {
+    return new Promise((resolve) => {
+      wx.showModal({
+        title,
+        content,
+        confirmText: '确定',
+        cancelText: '再想想',
+        success: (result) => resolve(Boolean(result.confirm)),
+        fail: () => resolve(false)
+      });
+    });
   }
 });

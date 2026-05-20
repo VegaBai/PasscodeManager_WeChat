@@ -1,6 +1,6 @@
 <view class="page">
   <view class="topbar">
-    <view>
+    <view class="topbar-title">
       <view class="title">羽毛球排队</view>
       <view class="subtitle" wx:if="{{currentGroup && currentGroup.openGId}}">
         <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
@@ -8,29 +8,30 @@
       <view class="subtitle" wx:elif="{{currentGroup}}">{{currentGroup.displayName || currentGroup.name}}</view>
       <view class="subtitle" wx:else>选择或创建一个群</view>
     </view>
-    <button class="icon-button" bindtap="refreshDashboard" loading="{{loading}}">刷新</button>
+    <view class="primary-button switch-group-button" bindtap="openSwitchGroupDialog">切换微信群</view>
   </view>
 
   <view class="section group-section">
-    <view class="section-title">球群</view>
     <view class="group-row" wx:if="{{groups.length}}">
-      <picker mode="selector" range="{{groups}}" range-key="displayName" value="{{currentGroupIndex}}" bindchange="onGroupChange">
-        <view class="picker-value" wx:if="{{currentGroup && currentGroup.openGId}}">
-          <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
-        </view>
-        <view class="picker-value" wx:else>{{currentGroup ? currentGroup.displayName : '选择球群'}}</view>
-      </picker>
+      <view class="group-label">球群</view>
+      <view class="group-name" wx:if="{{currentGroup && currentGroup.openGId}}">
+        <open-data type="groupName" open-gid="{{currentGroup.openGId}}"></open-data>
+      </view>
+      <view class="group-name" wx:else>{{currentGroup ? currentGroup.displayName : '选择球群'}}</view>
       <view class="invite-code" wx:if="{{currentGroup}}">{{currentGroup.openGIdShort || currentGroup.sourceText || '微信群'}}</view>
-    </view>
-
-    <view class="wechat-group-actions">
-      <button class="primary-button group-share-button" open-type="share" loading="{{bindingGroup}}">选择微信群</button>
-      <view class="group-hint">发到已有微信群后，从群里的卡片打开即可绑定</view>
     </view>
   </view>
 
+  <view class="group-court-divider"></view>
+
+  <view class="refresh-row {{loading ? 'is-loading' : ''}}" bindtap="refreshDashboard">
+    <view class="refresh-button">{{loading ? '刷新中' : '刷新'}}</view>
+  </view>
+
   <view wx:if="{{currentGroup}}">
-    <view class="court-stats">
+    <view class="section-block">
+      <view class="block-title">场地</view>
+
       <view class="court-stat-item">
         <view class="court-stat-title">正在打 {{courtStats.playingCount}} 个场地</view>
         <view class="court-stat-courts" wx:if="{{courtStats.playingItems.length}}">
@@ -41,6 +42,7 @@
         </view>
         <view class="court-stat-empty" wx:else>场地号：无</view>
       </view>
+
       <view class="court-stat-item">
         <view class="court-stat-title">排队中 {{courtStats.queuedCount}} 个场地</view>
         <view class="court-stat-courts" wx:if="{{courtStats.queuedItems.length}}">
@@ -51,108 +53,142 @@
         </view>
         <view class="court-stat-empty" wx:else>场地号：无</view>
       </view>
-    </view>
 
-    <view class="stats">
-      <view class="stat-item">
-        <view class="stat-value">{{stats.total}}</view>
-        <view class="stat-label">全部</view>
-      </view>
-      <view class="stat-item">
-        <view class="stat-value">{{stats.idle}}</view>
-        <view class="stat-label">空闲</view>
-      </view>
-      <view class="stat-item">
-        <view class="stat-value">{{stats.playing}}</view>
-        <view class="stat-label">正在打</view>
-      </view>
-      <view class="stat-item">
-        <view class="stat-value">{{stats.queued}}</view>
-        <view class="stat-label">排队</view>
-      </view>
-    </view>
-
-    <view class="section">
-      <view class="section-title">添加账号</view>
-      <view class="inline-form">
-        <input class="input" maxlength="32" placeholder="用户名" value="{{username}}" bindinput="onUsernameInput" />
-        <input class="input" maxlength="32" placeholder="密码" value="{{password}}" bindinput="onPasswordInput" />
-        <button class="primary-button" bindtap="addCredential">确定</button>
-      </view>
-    </view>
-
-    <view class="queue-actions">
-      <button class="queue-toggle" bindtap="toggleQueuePanel">{{queueOpen ? '收起排队' : '添加排队'}}</button>
-    </view>
-
-    <view class="section queue-panel" wx:if="{{queueOpen}}">
-      <view class="section-title">排队</view>
-      <view class="inline-form">
-        <view class="field-label">场地号：</view>
-        <input class="input court-input" placeholder="场地编号" value="{{courtName}}" bindinput="onCourtNameInput" />
-        <input class="input remaining-input" type="number" placeholder="当前剩余分钟" value="{{courtRemainingMinutes}}" bindinput="onCourtRemainingInput" />
-        <view class="queue-info">
-          <view>第 {{courtPreview.nextGroupNo}} 组</view>
-          <view>当前剩余 {{courtPreview.remainingMinutes}} 分钟</view>
-        </view>
+      <view class="queue-actions">
+        <view class="queue-toggle" bindtap="toggleQueuePanel">{{queueOpen ? '收起排队' : '添加排队'}}</view>
       </view>
 
-      <view class="half-group-panel" wx:if="{{halfGroupOptions.length}}">
-        <view class="half-group-title">补全半场</view>
-        <radio-group bindchange="onHalfGroupChange">
-          <label class="half-group-option">
-            <radio value="__new__" checked="{{!targetQueueEntryId}}" />
-            <text>新排一组</text>
-          </label>
-          <label class="half-group-option" wx:for="{{halfGroupOptions}}" wx:key="id">
-            <radio value="{{item.id}}" checked="{{targetQueueEntryId === item.id}}" />
-            <text>{{item.label}} · {{item.statusText}}</text>
-          </label>
-        </radio-group>
-      </view>
-
-      <checkbox-group bindchange="onQueueSelect">
-        <view class="check-list">
-          <label class="check-row" wx:for="{{idleCredentials}}" wx:key="_id">
-            <checkbox value="{{item._id}}" checked="{{item.selected}}" />
-            <view>
-              <view class="check-name">{{item.username}}</view>
-              <view class="check-pass">{{item.password}}</view>
-            </view>
-          </label>
-        </view>
-      </checkbox-group>
-
-      <view class="queue-footer">
-        <view class="selected-count">已选 {{selectedIds.length}} 个</view>
-        <button class="primary-button" bindtap="addQueueEntry" loading="{{savingQueue}}">确认排队</button>
-      </view>
-    </view>
-
-    <view class="section list-section">
-      <view class="section-title">账号池</view>
-      <view class="empty" wx:if="{{!sortedCredentials.length}}">暂无账号</view>
-
-      <view class="credential-card" wx:for="{{sortedCredentials}}" wx:key="_id">
-        <view class="credential-head">
-          <view class="credential-line">
-            <view class="credential-name">{{item.username}}</view>
-            <view wx:if="{{item.canDelete}}" class="delete-icon-button" data-id="{{item._id}}" bindtap="deleteCredential">×</view>
-            <view class="credential-pass">{{item.password}}</view>
+      <view class="section queue-panel" wx:if="{{queueOpen}}">
+        <view class="section-title">排队</view>
+        <view class="inline-form">
+          <view class="field-label">场地号：</view>
+          <input class="input court-input" placeholder="场地编号" value="{{courtName}}" bindinput="onCourtNameInput" />
+          <input class="input remaining-input" type="number" placeholder="当前剩余分钟" value="{{courtRemainingMinutes}}" bindinput="onCourtRemainingInput" />
+          <view class="queue-info">
+            <view>第 {{courtPreview.nextGroupNo}} 组</view>
+            <view>当前剩余 {{courtPreview.remainingMinutes}} 分钟</view>
           </view>
-          <view class="status-pill status-{{item.status}}">{{item.statusText}}</view>
-          <view wx:if="{{item.canCancelQueue}}" class="cancel-icon-button danger" data-entry-id="{{item.currentQueueEntryId}}" bindtap="cancelQueueEntry">取消</view>
         </view>
 
-        <view class="meta-row" wx:if="{{item.courtName}}">
-          <text>场地号：{{item.courtName}}</text>
-          <text wx:if="{{item.hasGroupNo}}">第 {{item.groupNo}} 组</text>
-          <text>{{item.timeText}}</text>
-        </view>
-        <view class="meta-row">
-          <text>{{item.ownerText}}</text>
+        <view class="half-group-panel" wx:if="{{halfGroupOptions.length}}">
+          <view class="half-group-title">补全半场</view>
+          <radio-group bindchange="onHalfGroupChange">
+            <label class="half-group-option">
+              <radio value="__new__" checked="{{!targetQueueEntryId}}" />
+              <text>新排一组</text>
+            </label>
+            <label class="half-group-option" wx:for="{{halfGroupOptions}}" wx:key="id">
+              <radio value="{{item.id}}" checked="{{targetQueueEntryId === item.id}}" />
+              <text>{{item.label}} · {{item.statusText}}</text>
+            </label>
+          </radio-group>
         </view>
 
+        <checkbox-group bindchange="onQueueSelect">
+          <view class="check-list">
+            <label class="check-row" wx:for="{{idleCredentials}}" wx:key="_id">
+              <checkbox value="{{item._id}}" checked="{{item.selected}}" />
+              <view>
+                <view class="check-name">{{item.username}}</view>
+                <view class="check-pass">{{item.password}}</view>
+              </view>
+            </label>
+          </view>
+        </checkbox-group>
+
+        <view class="queue-footer">
+          <view class="selected-count">已选 {{selectedIds.length}} 个</view>
+          <button class="primary-button" bindtap="addQueueEntry" loading="{{savingQueue}}">确认排队</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="section-block">
+      <view class="block-title">账号</view>
+
+      <view class="stats">
+        <view class="stat-item">
+          <view class="stat-value">{{stats.total}}</view>
+          <view class="stat-label">全部</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.idle}}</view>
+          <view class="stat-label">空闲</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.playing}}</view>
+          <view class="stat-label">正在打</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.queued}}</view>
+          <view class="stat-label">排队</view>
+        </view>
+      </view>
+
+      <view class="section add-account-section">
+        <view class="section-title">添加账号</view>
+        <view class="inline-form add-account-form">
+          <input class="input" maxlength="32" placeholder="用户名" value="{{username}}" bindinput="onUsernameInput" />
+          <input class="input" maxlength="32" placeholder="密码" value="{{password}}" bindinput="onPasswordInput" />
+          <button class="primary-button" bindtap="addCredential">确定</button>
+        </view>
+      </view>
+
+      <view class="section list-section">
+        <view class="section-title">账号池</view>
+        <view class="empty" wx:if="{{!sortedCredentials.length}}">暂无账号</view>
+
+        <view class="credential-card" wx:for="{{sortedCredentials}}" wx:key="_id">
+          <view class="credential-head">
+            <view class="credential-line">
+              <view class="credential-name">{{item.username}}</view>
+              <view wx:if="{{item.canDelete}}" class="delete-icon-button" data-id="{{item._id}}" bindtap="deleteCredential">×</view>
+              <view class="credential-pass">{{item.password}}</view>
+            </view>
+            <view class="status-pill status-{{item.status}}">{{item.statusText}}</view>
+            <view wx:if="{{item.canCancelQueue}}" class="cancel-icon-button danger" data-entry-id="{{item.currentQueueEntryId}}" data-credential-id="{{item._id}}" bindtap="cancelQueueEntry">取消</view>
+          </view>
+
+          <view class="meta-row" wx:if="{{item.courtName}}">
+            <text>场地号：{{item.courtName}}</text>
+            <text wx:if="{{item.hasGroupNo}}">第 {{item.groupNo}} 组</text>
+            <text>{{item.timeText}}</text>
+          </view>
+          <view class="meta-row">
+            <text>{{item.ownerText}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="switch-group-overlay" wx:if="{{switchGroupDialogOpen}}">
+    <view class="switch-group-dialog">
+      <view class="switch-group-title">切换微信群</view>
+      <view class="switch-group-message">转发到微信群后，从群里的链接打开，即可查看群排队</view>
+      <view class="switch-group-actions">
+        <view class="switch-group-cancel" bindtap="closeSwitchGroupDialog">取消</view>
+        <button class="primary-button switch-group-share" open-type="share" bindtap="closeSwitchGroupDialog">转发到微信群</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="cancel-overlay" wx:if="{{cancelDialogOpen}}">
+    <view class="cancel-dialog">
+      <view class="cancel-dialog-title">选择要取消的账号</view>
+      <view class="cancel-dialog-subtitle">必须选择 2 个或 4 个</view>
+      <checkbox-group bindchange="onCancelSelect">
+        <label class="cancel-option" wx:for="{{cancelOptions}}" wx:key="id">
+          <checkbox value="{{item.id}}" />
+          <view class="cancel-option-text">
+            <text class="cancel-option-name">{{item.username}}</text>
+            <text class="cancel-option-pass">{{item.password}}</text>
+          </view>
+        </label>
+      </checkbox-group>
+      <view class="cancel-dialog-actions">
+        <view class="cancel-secondary" bindtap="closeCancelDialog">返回</view>
+        <view class="cancel-primary {{cancelCanConfirm ? '' : 'is-disabled'}}" bindtap="confirmCancelSelection">确认取消</view>
       </view>
     </view>
   </view>

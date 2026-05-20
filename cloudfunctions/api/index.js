@@ -511,9 +511,17 @@ async function addQueueEntry(openid, payload) {
     }
 
     const now = new Date();
+    const existingBatches = Array.isArray(targetEntry.credentialBatches) && targetEntry.credentialBatches.length
+      ? targetEntry.credentialBatches
+      : [targetEntry.credentialIds || []];
+    const credentialBatches = existingBatches
+      .filter((batch) => (batch || []).length)
+      .concat([credentialIds]);
+
     await db.collection('queueEntries').doc(targetQueueEntryId).update({
       data: {
         credentialIds: mergedCredentialIds,
+        credentialBatches,
         updatedAt: now
       }
     });
@@ -598,6 +606,7 @@ async function addQueueEntry(openid, payload) {
       groupId,
       courtName,
       credentialIds,
+      credentialBatches: credentialIds.length ? [credentialIds] : [],
       status,
       groupNo,
       createdByOpenid: openid,
@@ -653,23 +662,59 @@ async function cancelQueueEntry(openid, payload) {
   await requireGroupMember(groupId, openid);
 
   const entry = await getDoc('queueEntries', payload.queueEntryId);
+  const requestedCancelCredentialIds = Array.isArray(payload.cancelCredentialIds) ? payload.cancelCredentialIds : [];
   if (!entry || entry.groupId !== groupId) throw new Error('排队记录不存在');
   if (!['playing', 'queued'].includes(entry.status)) {
     throw new Error('这条记录已经结束');
   }
 
   const now = new Date();
-  await db.collection('queueEntries').doc(entry._id).update({
-    data: {
-      status: 'cancelled',
-      cancelledByOpenid: openid,
-      cancelledAt: now,
-      updatedAt: now
+  const existingCredentialIds = entry.credentialIds || [];
+  const cancelCredentialIds = requestedCancelCredentialIds.length ? requestedCancelCredentialIds : existingCredentialIds;
+  if (!(cancelCredentialIds.length === 2 || cancelCredentialIds.length === 4)) {
+    throw new Error('必须取消 2 个或 4 个账号');
+  }
+  if (new Set(cancelCredentialIds).size !== cancelCredentialIds.length) {
+    throw new Error('不能重复选择账号');
+  }
+  const invalidCancelId = cancelCredentialIds.find((id) => !existingCredentialIds.includes(id));
+  if (invalidCancelId) throw new Error('只能取消这一组里的账号');
+
+  const remainingCredentialIds = existingCredentialIds.filter((id) => !cancelCredentialIds.includes(id));
+
+  if (!cancelCredentialIds.length) throw new Error('没有可取消的账号');
+
+  if (remainingCredentialIds.length) {
+    if (remainingCredentialIds.length !== 2) {
+      throw new Error('取消后必须保留 2 个账号或取消整组');
     }
-  });
+    const batches = Array.isArray(entry.credentialBatches) && entry.credentialBatches.length
+      ? entry.credentialBatches
+      : [existingCredentialIds];
+    const remainingBatches = batches
+      .map((batch) => (batch || []).filter((id) => !cancelCredentialIds.includes(id)))
+      .filter((batch) => batch.length);
+
+    await db.collection('queueEntries').doc(entry._id).update({
+      data: {
+        credentialIds: remainingCredentialIds,
+        credentialBatches: remainingBatches,
+        updatedAt: now
+      }
+    });
+  } else {
+    await db.collection('queueEntries').doc(entry._id).update({
+      data: {
+        status: 'cancelled',
+        cancelledByOpenid: openid,
+        cancelledAt: now,
+        updatedAt: now
+      }
+    });
+  }
 
   await db.collection('credentials').where({
-    _id: _.in(entry.credentialIds || [])
+    _id: _.in(cancelCredentialIds)
   }).update({
     data: {
       status: 'idle',
@@ -683,7 +728,8 @@ async function cancelQueueEntry(openid, payload) {
   await rescheduleCourt(groupId, entry.courtName);
   await logOperation(openid, groupId, 'cancelQueueEntry', {
     queueEntryId: entry._id,
-    courtName: entry.courtName
+    courtName: entry.courtName,
+    credentialIds: cancelCredentialIds
   });
 
   return {};
